@@ -116,95 +116,402 @@ To create an Ubuntu EC2 instance in AWS, follow these steps:
 
 ### ALL {master and Worker} 
 
-
+```sh
 sudo su
 
 printf "\n192.168.15.93 k8s-control\n192.168.15.94 k8s-1\n192.168.15.95 k8s-1\n\n" >> /etc/hosts
 
 printf "overlay\nbr_netfilter\n" >> /etc/modules-load.d/containerd.conf
-``
+```
 
+```sh
 modprobe overlay
 modprobe br_netfilter
 
 printf "net.bridge.bridge-nf-call-iptables = 1\nnet.ipv4.ip_forward = 1\nnet.bridge.bridge-nf-call-ip6tables = 1\n" >> /etc/sysctl.d/99-kubernetes-cri.conf
 
 sysctl --system
+```
 
+```sh
 wget https://github.com/containerd/containerd/releases/download/v1.7.13/containerd-1.7.13-linux-amd64.tar.gz -P /tmp/
 tar Cxzvf /usr/local /tmp/containerd-1.7.13-linux-amd64.tar.gz
 wget https://raw.githubusercontent.com/containerd/containerd/main/containerd.service -P /etc/systemd/system/
 systemctl daemon-reload
 systemctl enable --now containerd
+```
 
+```sh
 wget https://github.com/opencontainers/runc/releases/download/v1.1.12/runc.amd64 -P /tmp/
 install -m 755 /tmp/runc.amd64 /usr/local/sbin/runc
 
 wget https://github.com/containernetworking/plugins/releases/download/v1.4.0/cni-plugins-linux-amd64-v1.4.0.tgz -P /tmp/
 mkdir -p /opt/cni/bin
 tar Cxzvf /opt/cni/bin /tmp/cni-plugins-linux-amd64-v1.4.0.tgz
+```
 
-
+```sh
 mkdir -p /etc/containerd
 containerd config default | tee /etc/containerd/config.toml   <<<<<<<<<<< manually edit and change SystemdCgroup to true (not systemd_cgroup)
 vi /etc/containerd/config.toml
 systemctl restart containerd
+```
+
 
 swapoff -a  <<<<<<<< just disable it in /etc/fstab instead
 
+```sh
 apt-get update
 apt-get install -y apt-transport-https ca-certificates curl gpg
+```
 
+```sh
 mkdir -p -m 755 /etc/apt/keyrings
 curl -fsSL https://pkgs.k8s.io/core:/stable:/v1.29/deb/Release.key | sudo gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
 echo 'deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.29/deb/ /' | sudo tee /etc/apt/sources.list.d/kubernetes.list
+```
 
-apt-get update
+```sh
+ apt-get update
+```
 
+```sh
 reboot
+```
 
+```sh
 sudo su
+```
 
+```sh
 apt-get install -y kubelet=1.29.1-1.1 kubeadm=1.29.1-1.1 kubectl=1.29.1-1.1
 apt-mark hold kubelet kubeadm kubectl
+```
+
 
 # check swap config, ensure swap is 0
+
+```sh
 free -m
+```
 
 
 ### ONLY ON CONTROL NODE .. control plane install:
+
+```sh
 kubeadm init --pod-network-cidr 10.244.0.0/16 --kubernetes-version 1.29.1 --node-name k8s-control
+```
 
+```sh
 export KUBECONFIG=/etc/kubernetes/admin.conf
+```
 
-# add Calico 3.27.2 CNI 
+
+#### add Calico 3.27.2 CNI 
+
+```sh
 kubectl create -f https://raw.githubusercontent.com/projectcalico/calico/v3.27.2/manifests/tigera-operator.yaml
+```
+
+```sh
 wget https://raw.githubusercontent.com/projectcalico/calico/v3.27.2/manifests/custom-resources.yaml
+```
+
+```sh
 vi custom-resources.yaml <<<<<< edit the CIDR for pods if its custom
+```
+
+```sh
 kubectl apply -f custom-resources.yaml
+```
 
 
 To summarize, perform the following steps on each node in your cluster:
 
+```sh
 vi /etc/sysctl.conf
+```
 
--Add or update the following line:
+- Add or update the following line:
 
 net.ipv4.ip_forward = 1
 
 - Save and exit the editor.
 
-Apply the changes with
+- Apply the changes with
 
+```sh
 sysctl -p
+```
 
-# get worker node commands to run to join additional nodes into cluster
+#### get worker node commands to run to join additional nodes into cluster
+
+```sh
 kubeadm token create --print-join-command
-###
+```
+
+![](https://github.com/UzonduEgbombah/BoardGame/assets/137091610/371611b8-c52c-4628-8850-a276e8e84b04)
+
+
+
+![](https://github.com/UzonduEgbombah/BoardGame/assets/137091610/e333912a-d144-4507-94f0-8fe53d2c86a3)
+
+
+
+
+## Installing Jenkins on Ubuntu
+
+
+```bash
+#!/bin/bash
+
+# Install OpenJDK 17 JRE Headless
+sudo apt install openjdk-17-jre-headless -y
+
+# Download Jenkins GPG key
+sudo wget -O /usr/share/keyrings/jenkins-keyring.asc \
+  https://pkg.jenkins.io/debian-stable/jenkins.io-2023.key
+
+# Add Jenkins repository to package manager sources
+echo deb [signed-by=/usr/share/keyrings/jenkins-keyring.asc] \
+  https://pkg.jenkins.io/debian-stable binary/ | sudo tee \
+  /etc/apt/sources.list.d/jenkins.list > /dev/null
+
+# Update package manager repositories
+sudo apt-get update
+
+# Install Jenkins
+sudo apt-get install jenkins -y
+```
+
+Save this script in a file, for example, `install_jenkins.sh`, and make it executable using:
+
+```bash
+chmod +x install_jenkins.sh
+```
+
+Then, you can run the script using:
+
+```bash
+./install_jenkins.sh
+```
+
+This script will automate the installation process of OpenJDK 17 JRE Headless and Jenkins.
+
+
+## Install docker for future use
+
+```bash
+#!/bin/bash
+
+# Update package manager repositories
+sudo apt-get update
+
+# Install necessary dependencies
+sudo apt-get install -y ca-certificates curl
+
+# Create directory for Docker GPG key
+sudo install -m 0755 -d /etc/apt/keyrings
+
+# Download Docker's GPG key
+sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+
+# Ensure proper permissions for the key
+sudo chmod a+r /etc/apt/keyrings/docker.asc
+
+# Add Docker repository to Apt sources
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu \
+$(. /etc/os-release && echo "$VERSION_CODENAME") stable" | \
+sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+
+# Update package manager repositories
+sudo apt-get update
+
+sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin 
+```
+
+Save this script in a file, for example, `install_docker.sh`, and make it executable using:
+
+```bash
+chmod +x install_docker.sh
+```
+
+Then, you can run the script using:
+
+```bash
+./install_docker.sh
+```
+
+# SetUp Nexus
+
+```bash
+#!/bin/bash
+
+# Update package manager repositories
+sudo apt-get update
+
+# Install necessary dependencies
+sudo apt-get install -y ca-certificates curl
+
+# Create directory for Docker GPG key
+sudo install -m 0755 -d /etc/apt/keyrings
+
+# Download Docker's GPG key
+sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+
+# Ensure proper permissions for the key
+sudo chmod a+r /etc/apt/keyrings/docker.asc
+
+# Add Docker repository to Apt sources
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu \
+$(. /etc/os-release && echo "$VERSION_CODENAME") stable" | \
+sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+
+# Update package manager repositories
+sudo apt-get update
+
+sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin 
+```
+
+Save this script in a file, for example, `install_docker.sh`, and make it executable using:
+
+```bash
+chmod +x install_docker.sh
+```
+
+Then, you can run the script using:
+
+```bash
+./install_docker.sh
+```
+
+## Create Nexus using docker container
+
+To create a Docker container running Nexus 3 and exposing it on port 8081, you can use the following command:
+
+```bash
+docker run -d --name nexus -p 8081:8081 sonatype/nexus3:latest
+```
+
+This command does the following:
+
+- `-d`: Detaches the container and runs it in the background.
+- `--name nexus`: Specifies the name of the container as "nexus".
+- `-p 8081:8081`: Maps port 8081 on the host to port 8081 on the container, allowing access to Nexus through port 8081.
+- `sonatype/nexus3:latest`: Specifies the Docker image to use for the container, in this case, the latest version of Nexus 3 from the Sonatype repository.
+
+After running this command, Nexus will be accessible on your host machine at http://IP:8081.
+
+## Get Nexus initial password
+Your provided commands are correct for accessing the Nexus password stored in the container. Here's a breakdown of the steps:
+
+1. **Get Container ID**: You need to find out the ID of the Nexus container. You can do this by running:
+
+    ```bash
+    docker ps
+    ```
+
+    This command lists all running containers along with their IDs, among other information.
+
+2. **Access Container's Bash Shell**: Once you have the container ID, you can execute the `docker exec` command to access the container's bash shell:
+
+    ```bash
+    docker exec -it <container_ID> /bin/bash
+    ```
+
+    Replace `<container_ID>` with the actual ID of the Nexus container.
+
+3. **Navigate to Nexus Directory**: Inside the container's bash shell, navigate to the directory where Nexus stores its configuration:
+
+    ```bash
+    cd sonatype-work/nexus3
+    ```
+
+4. **View Admin Password**: Finally, you can view the admin password by displaying the contents of the `admin.password` file:
+
+    ```bash
+    cat admin.password
+    ```
+
+5. **Exit the Container Shell**: Once you have retrieved the password, you can exit the container's bash shell:
+
+    ```bash
+    exit
+    ```
+
+This process allows you to access the Nexus admin password stored within the container. Make sure to keep this password secure, as it grants administrative access to your Nexus instance.
+
+
+
+![](https://github.com/UzonduEgbombah/BoardGame/assets/137091610/815cbcbc-2742-4d51-9447-576c37f20399)
+
+
+
+
+# SetUp SonarQube
+
+```bash
+#!/bin/bash
+
+# Update package manager repositories
+sudo apt-get update
+
+# Install necessary dependencies
+sudo apt-get install -y ca-certificates curl
+
+# Create directory for Docker GPG key
+sudo install -m 0755 -d /etc/apt/keyrings
+
+# Download Docker's GPG key
+sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+
+# Ensure proper permissions for the key
+sudo chmod a+r /etc/apt/keyrings/docker.asc
+
+# Add Docker repository to Apt sources
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu \
+$(. /etc/os-release && echo "$VERSION_CODENAME") stable" | \
+sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+
+# Update package manager repositories
+sudo apt-get update
+
+sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin 
+```
+
+Save this script in a file, for example, `install_docker.sh`, and make it executable using:
+
+```bash
+chmod +x install_docker.sh
+```
+
+Then, you can run the script using:
+
+```bash
+./install_docker.sh
+```
+
+## Create Sonarqube Docker container
+To run SonarQube in a Docker container with the provided command, you can follow these steps:
+
+1. Open your terminal or command prompt.
+
+2. Run the following command:
+
+```bash
+docker run -d --name sonar -p 9000:9000 sonarqube:lts-community
+```
+
+This command will download the `sonarqube:lts-community` Docker image from Docker Hub if it's not already available locally. Then, it will create a container named "sonar" from this image, running it in detached mode (`-d` flag) and mapping port 9000 on the host machine to port 9000 in the container (`-p 9000:9000` flag).
+
+3. Access SonarQube by opening a web browser and navigating to `http://VmIP:9000`.
+
+This will start the SonarQube server, and you should be able to access it using the provided URL. If you're running Docker on a remote server or a different port, replace `localhost` with the appropriate hostname or IP address and adjust the port accordingly.
 
 
 
     
+![](https://github.com/UzonduEgbombah/BoardGame/assets/137091610/2bcfa7a2-2b75-4b07-9874-ad0783a88982)
 
 
 
